@@ -135,7 +135,15 @@ function registerTwitchEvents(state: AppState) {
         if(match) {
           await state.updateBaseTime(parseInt(match[1], 10));
         }
-      }
+        }
+
+      {
+        // ?pause
+        const match = message.match(/^\?pause/);
+        if (match) {
+             await state.pause();
+        }
+        }
 
       {
         // ?forcetimer
@@ -413,7 +421,12 @@ class AppState {
     this.forceTime(seconds);
     this.io.emit('update_uptime', {'started_at': this.startedAt});
     await this.db.run('INSERT OR REPLACE INTO settings VALUES (?, ?);', ['started_at', this.startedAt]);
-  }
+    }
+
+    async pause() {
+        this.isStarted = true;
+        this.startedAt = Date.now();
+    }
 
   async updateStartedAt(newStartedAt: number) {
     this.startedAt = newStartedAt
