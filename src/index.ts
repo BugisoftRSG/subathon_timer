@@ -54,6 +54,7 @@ const USE_MOCK = !!process.env.USE_FDGT_MOCK;
 
   let isStarted = false;
   let startedAt = 0;
+  let isPaused = false;
 
   const resStart = await db.get("SELECT * FROM settings WHERE key='started_at';");
   if(resStart) {
@@ -76,7 +77,7 @@ const USE_MOCK = !!process.env.USE_FDGT_MOCK;
     console.log(`Found last timer value in data.db: Ending at ${new Date(endingAt).toISOString()}`);
   }
 
-  const appState = new AppState(twitch, db, io, isStarted, startedAt, endingAt, baseTime);
+  const appState = new AppState(twitch, db, io, isStarted, startedAt, endingAt, baseTime, isPaused);
 
   registerSocketEvents(appState);
   registerTwitchEvents(appState);
@@ -139,8 +140,7 @@ function registerTwitchEvents(state: AppState) {
 
       {
         // ?pause
-        const match = message.match(/^\?pause/);
-        if (match) {
+        if (message == "?pause") {
              await state.pause();
         }
         }
@@ -273,8 +273,12 @@ function registerSocketEvents(state: AppState) {
       'donation': Math.round(state.baseTime * cfg.time.multipliers.donation),
       'follow': Math.round(state.baseTime * cfg.time.multipliers.follow)
     });
-    socket.emit('update_timer', {'ending_at': state.endingAt, 'forced': true});
-    socket.emit('update_uptime', {'started_at': state.startedAt});
+
+      console.log("state");
+      socket.emit('update_timer', { 'ending_at': state.endingAt, 'forced': true, 'paused': state.isPaused });
+
+      socket.emit('update_uptime', { 'started_at': state.startedAt });
+
     await state.broadcastGraph();
 
     for(const spin of state.spins.values()) {
@@ -373,6 +377,7 @@ class AppState {
   io: socketio.Server;
 
   isStarted: boolean;
+  isPaused: boolean;
   startedAt: number;
 
   endingAt: number;
@@ -383,12 +388,12 @@ class AppState {
 
   spins: Map<string, any> = new Map();
 
-  constructor(twitch: tmi.Client, db: sqlite.Database, io: socketio.Server,
-              isStarted: boolean, startedAt: number, endingAt: number, baseTime: number) {
+  constructor(twitch: tmi.Client, db: sqlite.Database, io: socketio.Server, isStarted: boolean, startedAt: number, endingAt: number, baseTime: number, isPaused: boolean) {
     this.twitch = twitch;
     this.db = db;
     this.io = io;
     this.isStarted = isStarted;
+    this.isPaused = isPaused;
     this.startedAt = startedAt;
     this.endingAt = endingAt;
     this.baseTime = baseTime;
@@ -424,8 +429,13 @@ class AppState {
     }
 
     async pause() {
-        this.isStarted = true;
-        this.startedAt = Date.now();
+        this.isPaused = !this.isPaused;
+
+        console.log("Paused" + this.isPaused);
+        if (!this.isPaused) {
+            this.isStarted = true;
+        }
+        this.io.emit('update_timer', { 'ending_at': this.endingAt, 'forced': true, 'paused': this.isPaused });
     }
 
   async updateStartedAt(newStartedAt: number) {
@@ -435,8 +445,8 @@ class AppState {
   }
 
   forceTime(seconds: number) {
-    this.endingAt = Date.now() + (seconds * 1000);
-    this.io.emit('update_timer', {'ending_at': this.endingAt, 'forced': true});
+      this.endingAt = Date.now() + (seconds * 1000);
+      this.io.emit('update_timer', { 'ending_at': this.endingAt, 'forced': true, 'paused': this.isPaused });
   }
 
   addTime(seconds: number) {
@@ -444,7 +454,7 @@ class AppState {
       return
     }
     this.endingAt = this.endingAt + (seconds * 1000);
-    this.io.emit('update_timer', {'ending_at': this.endingAt});
+      this.io.emit('update_timer', { 'ending_at': this.endingAt, 'paused': this.isPaused });
 
   }
 

@@ -2,7 +2,6 @@
 $(document).ready(() => {
 
   const $timer = $('#timer');
-  const $uptime = $('#uptime');
 
   const socket = io(window.location.origin, {transports: ['websocket', 'polling']});
 
@@ -10,40 +9,54 @@ $(document).ready(() => {
   let endingAt = 0;
   let startedAt = Date.now();
 
-  let timerAnimationPlaying = false;
+    let timerAnimationPlaying = false;
+    let klaxigon = false;
+
   let animationInterval = 0;
   setInterval(() => {
-    if(!timerAnimationPlaying && endingAt > Date.now()) {
-      $timer.text(dateMillisToTimer(endingAt));
-    } else if(endingAt < Date.now()) {
-      $timer.text("00:00");
-    }
-    $uptime.text("Uptime " + dateMillisToTimer(Date.now() + (Date.now() - startedAt)));
+          if (!timerAnimationPlaying && endingAt > Date.now()) {
+              console.log(1);
+              $timer.text(dateMillisToTimer(endingAt));
+          } else if (endingAt < Date.now()) {
+              console.log(2);
+              $timer.text("00:00");
+          }
+    //$uptime.text("Uptime " + dateMillisToTimer(Date.now() + (Date.now() - startedAt)));
     wheelLogic();
   }, 1000);
-  socket.on('update_timer', (req) => {
-    const newEndingAt = req.ending_at;
-    if(req.forced) {
-      endingAt = newEndingAt;
-      $timer.text(dateMillisToTimer(endingAt));
-    } else {
-      if(timerAnimationPlaying) {
-        clearInterval(animationInterval);
-      }
-      timerAnimationPlaying = true;
+    socket.on('update_timer', (req) => {
+        console.log("timer update");
 
-      let currentIndex = 0;
-      const keyframes = calculateKeyframeArray(endingAt, newEndingAt);
-      animationInterval = setInterval(() => {
-        $timer.text(keyframes[currentIndex]);
-        currentIndex++;
-        if(currentIndex >= keyframes.length) {
-          clearInterval(animationInterval);
-          timerAnimationPlaying = false;
-          endingAt = newEndingAt;
-        }
-      }, 20);
-    }
+      if (req.paused) {
+          console.log("paused");
+          timerAnimationPlaying = true;
+      }
+      else {
+          const newEndingAt = req.ending_at;
+          if (req.forced) {
+              endingAt = newEndingAt;
+              console.log(4);
+              $timer.text(dateMillisToTimer(endingAt));
+          } else {
+              if (timerAnimationPlaying) {
+                  clearInterval(animationInterval);
+              }
+              timerAnimationPlaying = true;
+
+              let currentIndex = 0;
+              const keyframes = calculateKeyframeArray(endingAt, newEndingAt);
+              animationInterval = setInterval(() => {
+                  console.log(5);
+                  $timer.text(keyframes[currentIndex]);
+                  currentIndex++;
+                  if (currentIndex >= keyframes.length) {
+                      clearInterval(animationInterval);
+                      timerAnimationPlaying = false;
+                      endingAt = newEndingAt;
+                  }
+              }, 20);
+          }
+      }
   });
   socket.on('update_uptime', (req) => {
     startedAt = req.started_at;
